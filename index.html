@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Task Manager</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-start p-4">
+
+    <div class="w-full max-w-md bg-slate-800 rounded-xl shadow-xl p-6 mt-6 border border-slate-700">
+        <h1 class="text-2xl font-bold mb-4 text-center text-blue-400">Team Task Manager</h1>
+        
+        <!-- Add Task Form -->
+        <form id="task-form" class="flex gap-2 mb-6">
+            <input type="text" id="task-input" placeholder="Enter a new task..." required
+                class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 text-white">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg transition">Add</button>
+        </form>
+
+        <!-- Task List -->
+        <ul id="task-list" class="space-y-3">
+            <p id="loading-text" class="text-center text-slate-400">Loading tasks from Firebase...</p>
+        </ul>
+    </div>
+
+    <!-- Firebase SDKs via CDN -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // TODO: Replace with your actual Firebase configuration object
+        const firebaseConfig = {
+            apiKey: "AIzaSyBLZp9YgbBeE32Y-NH1JW9KaGSCq9mgkPA",
+  authDomain: "team-task-app-3a941.firebaseapp.com",
+  projectId: "team-task-app-3a941",
+  storageBucket: "team-task-app-3a941.firebasestorage.app",
+  messagingSenderId: "465646950979",
+  appId: "1:465646950979:web:9497d4fc6290d1245152f6"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const taskForm = document.getElementById('task-form');
+        const taskInput = document.getElementById('task-input');
+        const taskList = document.getElementById('task-list');
+        const loadingText = document.getElementById('loading-text');
+
+        // Real-time listener for tasks collection
+        onSnapshot(collection(db, "tasks"), (snapshot) => {
+            taskList.innerHTML = "";
+            if (snapshot.empty) {
+                taskList.innerHTML = '<p class="text-center text-slate-500">No tasks found. Add one above!</p>';
+                return;
+            }
+
+            snapshot.forEach((docSnap) => {
+                const task = docSnap.data();
+                const taskId = docSnap.id;
+
+                const li = document.createElement('li');
+                li.className = "flex items-center justify-between bg-slate-900 p-3 rounded-lg border border-slate-700";
+                li.innerHTML = `
+                    <span class="${task.completed ? 'line-through text-slate-500' : 'text-slate-200'} cursor-pointer flex-1">${escapeHtml(task.text)}</span>
+                    <div class="flex gap-2">
+                        <button onclick="toggleTask('${taskId}', ${!task.completed})" class="text-xs px-2 py-1 rounded bg-${task.completed ? 'yellow' : 'green'}-600 hover:opacity-80">${task.completed ? 'Undo' : 'Done'}</button>
+                        <button onclick="deleteTask('${taskId}')" class="text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-white">Delete</button>
+                    </div>
+                `;
+                taskList.appendChild(li);
+            });
+        }, (error) => {
+            console.error("Error fetching tasks: ", error);
+            loadingText.innerText = "Error connecting to Firebase database.";
+        });
+
+        // Add task event
+        taskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = taskInput.value.trim();
+            if (!text) return;
+
+            try {
+                await addDoc(collection(db, "tasks"), {
+                    text: text,
+                    completed: false,
+                    createdAt: serverTimestamp()
+                });
+                taskInput.value = "";
+            } catch (err) {
+                console.error("Error adding document: ", err);
+                alert("Failed to save task.");
+            }
+        });
+
+        // Global functions for inline event handlers
+        window.deleteTask = async (id) => {
+            try {
+                await deleteDoc(doc(db, "tasks", id));
+            } catch (err) {
+                console.error("Error deleting task: ", err);
+            }
+        };
+
+        window.toggleTask = async (id, status) => {
+            try {
+                await updateDoc(doc(db, "tasks", id), { completed: status });
+            } catch (err) {
+                console.error("Error updating task: ", err);
+            }
+        };
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
