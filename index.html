@@ -3,20 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Task Manager</title>
+    <title>Team Task Manager</title>
     <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-start p-4">
 
-    <div class="w-full max-w-md bg-slate-800 rounded-xl shadow-xl p-6 mt-6 border border-slate-700">
+    <div class="w-full max-w-lg bg-slate-800 rounded-xl shadow-xl p-6 mt-6 border border-slate-700">
         <h1 class="text-2xl font-bold mb-4 text-center text-blue-400">Team Task Manager</h1>
         
-        <!-- Add Task Form -->
-        <form id="task-form" class="flex gap-2 mb-6">
+        <!-- Add Task Form with Set By, Priority & Due Date -->
+        <form id="task-form" class="flex flex-col gap-3 mb-6">
             <input type="text" id="task-input" placeholder="Enter a new task..." required
-                class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 text-white">
-            <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg transition">Add</button>
+                class="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 text-white">
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input type="text" id="author-input" placeholder="Set by (e.g. Lee)..." required
+                    class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-white text-sm">
+                
+                <input type="date" id="duedate-input" required
+                    class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-white text-sm">
+            </div>
+
+            <div class="flex gap-2">
+                <select id="priority-input"
+                    class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-white text-sm">
+                    <option value="Low">Low Priority</option>
+                    <option value="Medium" selected>Medium Priority</option>
+                    <option value="High">High Priority</option>
+                </select>
+
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-5 py-2 rounded-lg transition text-sm">Add Task</button>
+            </div>
         </form>
 
         <!-- Task List -->
@@ -30,7 +48,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // TODO: Replace with your actual Firebase configuration object
+        // TODO: Ensure your Firebase configuration is filled in here
         const firebaseConfig = {
             apiKey: "AIzaSyBLZp9YgbBeE32Y-NH1JW9KaGSCq9mgkPA",
   authDomain: "team-task-app-3a941.firebaseapp.com",
@@ -40,34 +58,53 @@
   appId: "1:465646950979:web:9497d4fc6290d1245152f6"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
         const taskForm = document.getElementById('task-form');
         const taskInput = document.getElementById('task-input');
+        const authorInput = document.getElementById('author-input');
+        const dueDateInput = document.getElementById('duedate-input');
+        const priorityInput = document.getElementById('priority-input');
         const taskList = document.getElementById('task-list');
         const loadingText = document.getElementById('loading-text');
+
+        // Set default date input to today
+        dueDateInput.valueAsDate = new Date();
+
+        const priorityStyles = {
+            High: 'border-red-500 text-red-400 bg-red-950/40',
+            Medium: 'border-yellow-500 text-yellow-400 bg-yellow-950/40',
+            Low: 'border-green-500 text-green-400 bg-green-950/40'
+        };
 
         // Real-time listener for tasks collection
         onSnapshot(collection(db, "tasks"), (snapshot) => {
             taskList.innerHTML = "";
             if (snapshot.empty) {
-                taskList.innerHTML = '<p class="text-center text-slate-500">No tasks found. Add one above!</p>';
+                taskList.innerHTML = '<p class="text-center text-slate-500 py-4">No tasks found. Add one above!</p>';
                 return;
             }
 
             snapshot.forEach((docSnap) => {
                 const task = docSnap.data();
                 const taskId = docSnap.id;
+                const pStyle = priorityStyles[task.priority] || priorityStyles.Medium;
 
                 const li = document.createElement('li');
-                li.className = "flex items-center justify-between bg-slate-900 p-3 rounded-lg border border-slate-700";
+                li.className = `flex items-center justify-between bg-slate-900 p-3 rounded-lg border ${task.completed ? 'border-slate-800 opacity-60' : 'border-slate-700'}`;
                 li.innerHTML = `
-                    <span class="${task.completed ? 'line-through text-slate-500' : 'text-slate-200'} cursor-pointer flex-1">${escapeHtml(task.text)}</span>
-                    <div class="flex gap-2">
-                        <button onclick="toggleTask('${taskId}', ${!task.completed})" class="text-xs px-2 py-1 rounded bg-${task.completed ? 'yellow' : 'green'}-600 hover:opacity-80">${task.completed ? 'Undo' : 'Done'}</button>
-                        <button onclick="deleteTask('${taskId}')" class="text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-white">Delete</button>
+                    <div class="flex-1 pr-3">
+                        <div class="flex items-center gap-2 mb-1 flex-wrap">
+                            <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${pStyle}">${task.priority || 'Medium'}</span>
+                            <span class="text-xs text-slate-400">Set by: <strong class="text-slate-300">${escapeHtml(task.setBy || 'Team')}</strong></span>
+                            ${task.dueDate ? `<span class="text-xs text-slate-400">Due: <strong class="text-slate-300">${escapeHtml(task.dueDate)}</strong></span>` : ''}
+                        </div>
+                        <p class="${task.completed ? 'line-through text-slate-500' : 'text-slate-200'} text-sm break-words">${escapeHtml(task.text)}</p>
+                    </div>
+                    <div class="flex gap-2 flex-shrink-0">
+                        <button onclick="toggleTask('${taskId}', ${!task.completed})" class="text-xs px-2.5 py-1.5 rounded font-medium bg-${task.completed ? 'yellow' : 'green'}-600 hover:opacity-80 text-white">${task.completed ? 'Undo' : 'Done'}</button>
+                        <button onclick="deleteTask('${taskId}')" class="text-xs px-2.5 py-1.5 rounded font-medium bg-red-600 hover:bg-red-500 text-white">Delete</button>
                     </div>
                 `;
                 taskList.appendChild(li);
@@ -81,11 +118,17 @@
         taskForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const text = taskInput.value.trim();
-            if (!text) return;
+            const setBy = authorInput.value.trim();
+            const dueDate = dueDateInput.value;
+            const priority = priorityInput.value;
+            if (!text || !setBy) return;
 
             try {
                 await addDoc(collection(db, "tasks"), {
                     text: text,
+                    setBy: setBy,
+                    dueDate: dueDate,
+                    priority: priority,
                     completed: false,
                     createdAt: serverTimestamp()
                 });
